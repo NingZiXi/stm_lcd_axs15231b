@@ -1,0 +1,2 @@
+Init command data in src/stm_lcd_axs15231b.c is adapted from Espressif Systems esp_lcd_axs15231b (Apache-2.0, LICENSE-ESPRESSIF), and the AgentDock 170x560 BSP using the same table. Component glue is separately licensed under MIT (LICENSE). The identical init table appears in the Espressif Apache-2.0 source. Preserve that license and source attribution in distributions.
+

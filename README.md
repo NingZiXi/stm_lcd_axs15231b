@@ -1,5 +1,11 @@
 # stm_lcd_axs15231b：AXS15231B 170×560 SPI 屏幕
 
+## 版本与支持边界
+
+当前为本地未发布开发版，尚无正式版本 tag / Release，不能当作可远端获取的正式依赖。
+正式发布需完成组件验证、GitHub/Gitee 同提交推送、版本 tag 与 GitHub Release，再更新总仓库子模块及消费工程的 FetchContent GIT_TAG。
+核心组件仅依赖 C11 与 `stm_common`；STM32F407 HAL1 仅用于板级示例，无强制 HAL、RTOS、日志或 RTT 依赖。
+
 将 AgentDock 的 170×560 RGB565 初始化序列和 Espressif 的屏幕命令协议移植为独立 `stm_common` 组件。适用于 **4 线、8-bit 命令/数据 SPI（SPI mode 0）**；不提供 QSPI/I80/DSI。初始 MADCTL=RGB（可设 `bgr=1`），COLMOD=0x55。32 条模组初始化项来自 Espressif Apache-2.0 实现，应保留授权，见 `NOTICE` / `LICENSE-ESPRESSIF`。
 
 ## 调用
@@ -31,7 +37,7 @@ add_subdirectory(Lib/stm_lcd_axs15231b)
 target_link_libraries(your_firmware PRIVATE stm_lcd_axs15231b)
 ```
 
-优先复用同级 `stm_common` 或已有 target；独立构建可从固定提交下载（禁网 `-DSTM_COMMON_FETCH=OFF`）。运行主机测试：`cmake -S tests -B build && cmake --build build && ctest --test-dir build --output-on-failure`。已有 C11/C++17 头文件消费及命令/生命周期/错误测试；**没有 F407 实板时序、颜色和性能验收**。
+优先复用同级 `stm_common` 或已有 target；独立构建可从固定提交下载（禁网 `-DSTM_COMMON_FETCH=OFF`）。运行主机测试：`cmake -S tests -B build && cmake --build build && ctest --test-dir build --output-on-failure`。已有 C11/C++17 头文件消费及命令/生命周期/错误测试；**不将主机测试等同于实板验收；模组时序、刷新范围及性能须在具体消费工程单独记录**。
 
-[`examples/stm32_hal/example.c`](examples/stm32_hal/example.c) 为 F407 板级占位示例，`board_init()` 故意返回配置错误，必须根据真实接线实现后再运行。现有 F407 `.ioc` 的 SPI1 接 GD25Q128，不可复用其 CS 或假设已经接上此屏。
+[`examples/stm32_hal/example.c`](examples/stm32_hal/example.c) 为 F407 板级占位示例，`board_init()` 故意返回配置错误，必须根据真实接线实现后再运行。本示例不提供 `.ioc`。实际板级引脚在消费工程配置，不可假设某个 SPI/CS 可直接复用。
 

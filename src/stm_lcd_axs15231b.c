@@ -2,7 +2,7 @@
 #include "stm_lcd_impl.h"
 #include <stdlib.h>
 
-/* AXS15231B init data: see LICENSE-ESPRESSIF. */
+/* AXS15231B init data adapted from Espressif (Apache-2.0). */
 typedef struct
 {
     uint8_t cmd, size;

@@ -10,7 +10,7 @@
 
 - 先读 `include/stm_lcd_axs15231b.h`、`src/stm_lcd_axs15231b.c`、`examples/stm32_hal/example.c`；再核对框架公开面板接口。
 - 应用提供 IO 和控制上下文，构造返回通用 panel；没有旧 API 包装。构造不访问硬件，初始输出必须为空，失败回滚。
-- 默认复用 target/本地源码；两个 AXS 共用固定 stm_lcd 提交 `da713eecea80c5abb59973a3b003015800011b4a`，不改为 main。选项与解析优先级以本地 CMake 和 README 为准。
+- 默认复用 target/本地源码；两个 AXS 共用固定 stm_lcd v1.0.0 提交 `c359e54a657be38aec90c797ea19ee3d492d9284`，不改为 main。选项与解析优先级以本地 CMake 和 README 为准。
 - 不修改模组初始化表来尝试旋转/提速；170×560 为当前原生竖屏模组，不代表所有 AXS 模组相同。
 - 每次独立 CASET/RASET/RAMWR，不能因 y1 非零改用 RAMWRC；绘图右下边界不包含，固定 RGB565。
 - 芯片驱动不依赖 HAL/LVGL，不能塞入 CS/DC/DMA、引脚、共享复位协调或 port 调度。复用 stm_lcd 的可选适配。
@@ -44,7 +44,7 @@ ctest --test-dir build/tests --output-on-failure
 
 ## 依赖回归
 
-在本组件根目录执行以下命令，需要 Python 3 和 Git。测试还包含固定提交拉取和双组件解析，默认本地 Git 仓库必须包含 README 标注的固定 stm_lcd 提交，普通无 .git 的拷贝不能替代：
+在本组件根目录执行以下命令，需要 Python 3 和 Git。测试还包含固定提交拉取和双组件解析，默认本地 Git 仓库必须包含 README 标注的固定 stm_lcd v1.0.0 提交，普通无 .git 的拷贝不能替代：
 
 ```sh
 python tests/test_dependency.py --lcd-source /absolute/path/to/stm_lcd --common-source /absolute/path/to/stm_common

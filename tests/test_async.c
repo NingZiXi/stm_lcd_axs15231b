@@ -1,4 +1,7 @@
-/** @file test_async.c @brief Panel owns protocol and pending lifetime, without HAL/LVGL. */
+/**
+ * @file    test_async.c
+ * @brief   验证组件主机回归，不替代实板验收。
+ */
 #include "stm_lcd_axs15231b.h"
 #include "stm_lcd_impl.h"
 #include <assert.h>
@@ -36,12 +39,12 @@ static stm_err_t async_color(void *io, uint8_t cmd, const void *data, size_t byt
     assert(payload[0] == 0 && payload[1] == 5 && payload[2] == 0 && payload[3] == 6);
     ++submits;
     if (submit_result != STM_OK)
-        return submit_result; /* Failed submission retains no external ownership. */
+        return submit_result; // 提交失败且硬件停止时归还所有权。
     borrowed = data;
     assert(stm_lcd_panel_display_on_off(panel, 0) == STM_ERR_INVALID_STATE);
     if (inline_complete)
     {
-        borrowed = NULL; /* Physical transport quiescent before completion. */
+        borrowed = NULL; // 完成前确认物理传输停止。
         assert(stm_lcd_io_complete(&g_io, STM_OK) == STM_OK);
     }
     return STM_OK;

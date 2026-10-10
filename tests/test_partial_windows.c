@@ -1,6 +1,7 @@
-/** @file test_partial_windows.c @brief RAMWR/RAMWRC address-cursor regression.
- * Datasheet V0.9 sections 3.2.2.9/10: RAMWR starts at CASET/RASET;
- * RAMWRC continues the previous write cursor. Model only this distinction. */
+/**
+ * @file    test_partial_windows.c
+ * @brief   验证组件主机回归，不替代实板验收。
+ */
 #include "stm_lcd_axs15231b.h"
 #include "stm_lcd_impl.h"
 #include <assert.h>
@@ -90,11 +91,11 @@ int main(void)
     const uint8_t blue[] = {0x00, 0x1F, 0x00, 0x1F};
     assert(stm_lcd_panel_draw_bitmap(panel, 0, 0, 2, 1, red) == STM_OK);
     assert(frame[0][0] == 0xF800);
-    /* Next LVGL invalidation is the bottom percentage, not the next row. */
+    // 下一脏矩形跳至底部百分比区域。
     assert(stm_lcd_panel_draw_bitmap(panel, 75, 544, 77, 545, green) == STM_OK);
     assert(frame[544][75] == 0x07E0 && frame[544][76] == 0x07E0);
     assert(frame[0][0] == 0xF800);
-    /* Then jump backwards to an unrelated loader tile. */
+    // 再向前跳至无关加载动画区域。
     assert(stm_lcd_panel_draw_bitmap(panel, 20, 88, 22, 89, blue) == STM_OK);
     assert(frame[88][20] == 0x001F && frame[88][21] == 0x001F);
     assert(frame[544][75] == 0x07E0 && frame[0][0] == 0xF800);

@@ -1,4 +1,7 @@
-/** @file example.c @brief Configure the board, then create a generic panel. */
+/**
+ * @file    example.c
+ * @brief   演示通用面板接入及板级配置边界。
+ */
 #include "stm_lcd_axs15231b.h"
 #include "stm_lcd_spi_f4.h"
 static stm_lcd_spi_f4_t spi;
@@ -10,7 +13,7 @@ static void delay_ms(void *context, uint32_t ms)
     HAL_Delay(ms);
 }
 
-/* Application supplies clocks/GPIO/SPI and reset configuration. No PD15/backlight writes. */
+// 板级提供时钟、GPIO、SPI 及复位配置，不操作 PD15。
 extern stm_err_t board_init(stm_lcd_spi_f4_config_t *spi_config,
                             lcd_axs15231b_config_t *panel_config);
 

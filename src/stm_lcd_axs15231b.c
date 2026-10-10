@@ -1,8 +1,12 @@
+/**
+ * @file    stm_lcd_axs15231b.c
+ * @brief   实现 AXS15231B 初始化及独立窗口像素传输。
+ */
 #include "stm_lcd_axs15231b.h"
 #include "stm_lcd_impl.h"
 #include <stdlib.h>
 
-/* AXS15231B init data adapted from Espressif (Apache-2.0). */
+// AXS15231B 初始化数据改编自 Espressif（Apache-2.0）。
 typedef struct
 {
     uint8_t cmd, size;
@@ -10,8 +14,7 @@ typedef struct
     uint8_t data[31];
 } init_command_t;
 
-// 模组专用参数表；
-// 逻辑尺寸配置不能替代其他面板的时序参数。
+// 模组专用初始化表，修改逻辑尺寸不改变面板时序。
 static const init_command_t init_commands[] = {
     {0xBB, 8, 0, {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x5A, 0xA5}},
     {0xA0,
@@ -99,9 +102,9 @@ static const init_command_t init_commands[] = {
 
 struct lcd_axs15231b_context
 {
-    struct stm_lcd_panel base;     /**< Embedded generic interface. */
-    lcd_axs15231b_config_t config; /**< Controller-specific configuration. */
-    uint8_t initialized;           /**< Initialization succeeded. */
+    struct stm_lcd_panel base;     // 嵌入式通用面板接口。
+    lcd_axs15231b_config_t config; // 控制器配置副本。
+    uint8_t initialized;           // 初始化成功标志。
 };
 
 static stm_err_t panel_reset(stm_lcd_panel_handle_t base)
@@ -210,8 +213,7 @@ static stm_err_t panel_draw_bitmap(stm_lcd_panel_handle_t base,
     stm_err_t err = panel_set_window(base, x1, y1, x2, y2);
     if (err != STM_OK)
         return err;
-    // 每次调用都是独立窗口：RAMWR 从刚设置的 CASET/RASET 起点写入。
-    // RAMWRC 会延续上一次写入游标，不能凭 y1 != 0 用于 LVGL 的不连续脏矩形。
+    // 每个独立窗口使用 RAMWR，不延续上次写入游标。
     return stm_lcd_io_tx_color(panel->config.io, 0x2C, pixels, width * height * 2u);
 }
 

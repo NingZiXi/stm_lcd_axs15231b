@@ -1,13 +1,8 @@
-/**
- * @file stm_lcd_axs15231b.c
- *
- * @brief AXS15231B 模组命令与实例生命周期。
- */
-/* AXS15231B 170x560 init data adapted from Espressif (Apache-2.0). See NOTICE. */
 #include "stm_lcd_axs15231b.h"
-#include <stdint.h>
+#include "stm_lcd_impl.h"
 #include <stdlib.h>
 
+/* AXS15231B init data: see LICENSE-ESPRESSIF. */
 typedef struct
 {
     uint8_t cmd, size;
@@ -104,113 +99,83 @@ static const init_command_t init_commands[] = {
 
 struct lcd_axs15231b_context
 {
-    lcd_axs15231b_config_t config;
-    uint8_t initialized;
+    struct stm_lcd_panel base;     /**< Embedded generic interface. */
+    lcd_axs15231b_config_t config; /**< Controller-specific configuration. */
+    uint8_t initialized;           /**< Initialization succeeded. */
 };
 
-stm_err_t lcd_axs15231b_create(const lcd_axs15231b_config_t *config, lcd_axs15231b_handle_t *out)
+static stm_err_t panel_reset(stm_lcd_panel_handle_t base)
 {
-    if (!config || !out)
-        return STM_ERR_INVALID_ARG;
-    if (*out)
-        return STM_ERR_INVALID_STATE;
-    if (!config->tx_param || !config->tx_color || !config->delay_ms || !config->width ||
-        !config->height || config->bgr > 1u || (uint32_t)config->width + config->x_gap > 65536u ||
-        (uint32_t)config->height + config->y_gap > 65536u)
-        return STM_ERR_INVALID_CONFIG;
-    lcd_axs15231b_handle_t panel = calloc(1, sizeof(*panel));
-    if (!panel)
-        return STM_ERR_NO_MEM;
-    panel->config = *config;
-    *out = panel;
-    return STM_OK;
-}
-
-stm_err_t lcd_axs15231b_delete(lcd_axs15231b_handle_t *handle)
-{
-    if (!handle)
-        return STM_ERR_INVALID_ARG;
-    free(*handle);
-    *handle = NULL;
-    return STM_OK;
-}
-
-stm_err_t lcd_axs15231b_reset(lcd_axs15231b_handle_t panel)
-{
+    struct lcd_axs15231b_context *panel = (void *)base;
     if (!panel)
         return STM_ERR_INVALID_ARG;
     panel->initialized = 0;
     if (!panel->config.reset)
-        return STM_OK;
-    stm_err_t err = panel->config.reset(panel->config.io, 1);
+        return STM_ERR_NOT_SUPPORTED;
+    stm_err_t err = panel->config.reset(panel->config.control_context, 1);
     if (err != STM_OK)
         return err;
-    panel->config.delay_ms(panel->config.io, 10);
-    err = panel->config.reset(panel->config.io, 0);
+    panel->config.delay_ms(panel->config.control_context, 10);
+    err = panel->config.reset(panel->config.control_context, 0);
     if (err != STM_OK)
         return err;
-    panel->config.delay_ms(panel->config.io, 10);
-    err = panel->config.reset(panel->config.io, 1);
+    panel->config.delay_ms(panel->config.control_context, 10);
+    err = panel->config.reset(panel->config.control_context, 1);
     if (err != STM_OK)
         return err;
-    panel->config.delay_ms(panel->config.io, 120);
+    panel->config.delay_ms(panel->config.control_context, 120);
     return STM_OK;
 }
 
-stm_err_t lcd_axs15231b_init(lcd_axs15231b_handle_t panel)
+static stm_err_t panel_init(stm_lcd_panel_handle_t base)
 {
+    struct lcd_axs15231b_context *panel = (void *)base;
     if (!panel)
         return STM_ERR_INVALID_ARG;
     // 初始化失败时禁止继续绘制，避免将半完成配置当作可用面板。
     panel->initialized = 0;
-    stm_err_t err = panel->config.tx_param(panel->config.io, 0x11, NULL, 0);
+    stm_err_t err = stm_lcd_io_tx_param(panel->config.io, 0x11, NULL, 0);
     if (err != STM_OK)
         return err;
-    panel->config.delay_ms(panel->config.io, 100);
+    panel->config.delay_ms(panel->config.control_context, 100);
     uint8_t madctl = panel->config.bgr ? 0x08u : 0x00u;
-    err = panel->config.tx_param(panel->config.io, 0x36, &madctl, 1);
+    err = stm_lcd_io_tx_param(panel->config.io, 0x36, &madctl, 1);
     if (err != STM_OK)
         return err;
     const uint8_t colmod = 0x55u;
-    err = panel->config.tx_param(panel->config.io, 0x3A, &colmod, 1);
+    err = stm_lcd_io_tx_param(panel->config.io, 0x3A, &colmod, 1);
     if (err != STM_OK)
         return err;
     for (size_t i = 0; i < sizeof init_commands / sizeof init_commands[0]; ++i)
     {
         const init_command_t *op = &init_commands[i];
-        err =
-            panel->config.tx_param(panel->config.io, op->cmd, op->size ? op->data : NULL, op->size);
+        err = stm_lcd_io_tx_param(panel->config.io, op->cmd, op->size ? op->data : NULL, op->size);
         if (err != STM_OK)
             return err;
         if (op->delay_ms)
-            panel->config.delay_ms(panel->config.io, op->delay_ms);
+            panel->config.delay_ms(panel->config.control_context, op->delay_ms);
     }
     panel->initialized = 1;
     return STM_OK;
 }
 
-stm_err_t lcd_axs15231b_display_on_off(lcd_axs15231b_handle_t panel, int on)
+static stm_err_t panel_display_on_off(stm_lcd_panel_handle_t base, int on)
 {
+    struct lcd_axs15231b_context *panel = (void *)base;
     if (!panel || (on != 0 && on != 1))
         return STM_ERR_INVALID_ARG;
     if (!panel->initialized)
         return STM_ERR_INVALID_STATE;
-    return panel->config.tx_param(panel->config.io, on ? 0x29 : 0x28, NULL, 0);
+    return stm_lcd_io_tx_param(panel->config.io, on ? 0x29 : 0x28, NULL, 0);
 }
 
-stm_err_t lcd_axs15231b_draw_bitmap(lcd_axs15231b_handle_t panel,
-                                    uint16_t x1,
-                                    uint16_t y1,
-                                    uint16_t x2,
-                                    uint16_t y2,
-                                    const void *pixels)
+static stm_err_t
+panel_set_window(stm_lcd_panel_handle_t base, uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2)
 {
-    if (!panel || !pixels || x1 >= x2 || y1 >= y2)
+    struct lcd_axs15231b_context *panel = (void *)base;
+    if (!panel || x1 >= x2 || y1 >= y2)
         return STM_ERR_INVALID_ARG;
     if (x2 > panel->config.width || y2 > panel->config.height)
-        return STM_ERR_OUT_OF_RANGE;
-    size_t width = x2 - x1, height = y2 - y1;
-    if (width > SIZE_MAX / height / 2u)
         return STM_ERR_OUT_OF_RANGE;
     if (!panel->initialized)
         return STM_ERR_INVALID_STATE;
@@ -218,12 +183,90 @@ stm_err_t lcd_axs15231b_draw_bitmap(lcd_axs15231b_handle_t panel,
     uint32_t ya = (uint32_t)y1 + panel->config.y_gap, yb = (uint32_t)y2 - 1u + panel->config.y_gap;
     uint8_t x[4] = {(uint8_t)(xa >> 8), (uint8_t)xa, (uint8_t)(xb >> 8), (uint8_t)xb};
     uint8_t y[4] = {(uint8_t)(ya >> 8), (uint8_t)ya, (uint8_t)(yb >> 8), (uint8_t)yb};
-    stm_err_t err = panel->config.tx_param(panel->config.io, 0x2A, x, sizeof x);
+    stm_err_t err = stm_lcd_io_tx_param(panel->config.io, 0x2A, x, sizeof x);
     if (err != STM_OK)
         return err;
-    err = panel->config.tx_param(panel->config.io, 0x2B, y, sizeof y);
+    err = stm_lcd_io_tx_param(panel->config.io, 0x2B, y, sizeof y);
     if (err != STM_OK)
         return err;
-    // 保留当前模组的首行 RAMWR / 后续行 RAMWRC 分块策略。
-    return panel->config.tx_color(panel->config.io, y1 ? 0x3C : 0x2C, pixels, width * height * 2u);
+    return STM_OK;
+}
+
+static stm_err_t panel_draw_bitmap(stm_lcd_panel_handle_t base,
+                                   uint16_t x1,
+                                   uint16_t y1,
+                                   uint16_t x2,
+                                   uint16_t y2,
+                                   const void *pixels)
+{
+    struct lcd_axs15231b_context *panel = (void *)base;
+    if (!panel || !pixels || x1 >= x2 || y1 >= y2)
+        return STM_ERR_INVALID_ARG;
+    if (x2 > panel->config.width || y2 > panel->config.height)
+        return STM_ERR_OUT_OF_RANGE;
+    size_t width = x2 - x1, height = y2 - y1;
+    if (width > SIZE_MAX / height / 2u)
+        return STM_ERR_OUT_OF_RANGE;
+    stm_err_t err = panel_set_window(base, x1, y1, x2, y2);
+    if (err != STM_OK)
+        return err;
+    // 每次调用都是独立窗口：RAMWR 从刚设置的 CASET/RASET 起点写入。
+    // RAMWRC 会延续上一次写入游标，不能凭 y1 != 0 用于 LVGL 的不连续脏矩形。
+    return stm_lcd_io_tx_color(panel->config.io, 0x2C, pixels, width * height * 2u);
+}
+
+static stm_err_t panel_draw_async(stm_lcd_panel_handle_t base,
+                                  uint16_t x1,
+                                  uint16_t y1,
+                                  uint16_t x2,
+                                  uint16_t y2,
+                                  const void *pixels)
+{
+    struct lcd_axs15231b_context *panel = (void *)base;
+    stm_err_t err = panel_set_window(base, x1, y1, x2, y2);
+    if (err != STM_OK)
+        return err;
+    return stm_lcd_io_tx_color_async(panel->config.io, 0x2C, pixels,
+                                     (size_t)(x2 - x1) * (y2 - y1) * 2u);
+}
+
+static void panel_destroy(stm_lcd_panel_handle_t panel)
+{
+    free(panel);
+}
+
+static const stm_lcd_panel_ops_t ops = {
+    .reset = panel_reset,
+    .init = panel_init,
+    .display_on_off = panel_display_on_off,
+    .set_window = panel_set_window,
+    .draw = panel_draw_bitmap,
+    .draw_async = panel_draw_async,
+    .destroy = panel_destroy,
+};
+
+stm_err_t lcd_axs15231b_create(const lcd_axs15231b_config_t *config, stm_lcd_panel_handle_t *out)
+{
+    if (!config || !out)
+        return STM_ERR_INVALID_ARG;
+    if (*out)
+        return STM_ERR_INVALID_STATE;
+    if (!config->io || !config->io->ops || !config->io->ops->tx_param ||
+        !config->io->ops->tx_color || !config->delay_ms || !config->width || !config->height ||
+        config->bgr > 1 || (uint32_t)config->width + config->x_gap > 65536u ||
+        (uint32_t)config->height + config->y_gap > 65536u)
+        return STM_ERR_INVALID_CONFIG;
+    struct lcd_axs15231b_context *panel = calloc(1, sizeof(*panel));
+    if (!panel)
+        return STM_ERR_NO_MEM;
+    panel->config = *config;
+    stm_err_t err =
+        stm_lcd_panel_base_init(&panel->base, &ops, config->io, config->width, config->height);
+    if (err != STM_OK)
+    {
+        free(panel);
+        return err;
+    }
+    *out = &panel->base;
+    return STM_OK;
 }

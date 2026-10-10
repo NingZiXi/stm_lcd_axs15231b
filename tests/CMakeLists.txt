@@ -9,3 +9,11 @@ add_library(header_consumers OBJECT headers.c headers.cpp)
 target_compile_features(header_consumers PRIVATE c_std_11 cxx_std_17)
 target_link_libraries(header_consumers PRIVATE stm_lcd_axs15231b)
 add_test(NAME panel COMMAND test_component)
+
+add_executable(test_partial_windows test_partial_windows.c)
+target_link_libraries(test_partial_windows PRIVATE stm_lcd_axs15231b)
+add_test(NAME partial_windows COMMAND test_partial_windows)
+
+add_executable(test_async test_async.c)
+target_link_libraries(test_async PRIVATE stm_lcd_axs15231b)
+add_test(NAME async_protocol_ownership COMMAND test_async)

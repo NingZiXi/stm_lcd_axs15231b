@@ -1,9 +1,7 @@
-# STM32F407 HAL 接入参考
+# 最小接入示例
 
-这是最小板级接口示例，不是带 `.ioc`、完整时钟和实际接线的固件工程。
-`board_init()` 故意返回 `STM_ERR_INVALID_CONFIG`；实现 SPI mode 0 / 8-bit、CS/DC/RST GPIO、供电及句柄赋值后再运行。
-调用顺序为 create -> reset -> init -> display_on_off。RGB565 像素在线上高字节在前。
+使用当前通用 `stm_lcd` API，无旧回调包装。示例不是可直接烧录的完整板级项目。
 
-示例不要求模组引出背光控制脚；背光或电源如可控，由实际板级另行管理，不能用 MCU GPIO 给背光供电。
-共享 SPI 时对命令及其全部数据保持 CS/事务锁，并防止窗口与像素写入交错；不要从 ISR 调用。
-示例本身未进行实板验收，不能由主机编译结果推定模组时序和颜色正确。
+屏幕/触摸示例依赖 `stm_lcd` 的可选 STM32F4 HAL 适配，需应用实现 `board_init`、时钟/引脚/外设和复位协调。LVGL示例仅接收配置，port自动初始化LVGL和tick；主循环调用 example_step(port, now)，不要另行调用lv_tick_inc或handler。
+
+HAL回调由应用显式转发，IRQ中禁止调用通用完成/LVGL。删除port后才删除设备，最后deinit IO；缓冲静态由应用持有。

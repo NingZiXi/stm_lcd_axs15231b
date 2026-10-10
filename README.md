@@ -1,43 +1,21 @@
-# stm_lcd_axs15231b：AXS15231B 170×560 SPI 屏幕
+# stm_lcd_axs15231b
 
-## 版本与支持边界
+可移植 AXS15231B 面板驱动，只依赖 `stm_lcd` / `stm_common`，不依赖 HAL/LVGL。
 
-当前为本地未发布开发版，尚无正式版本 tag / Release，不能当作可远端获取的正式依赖。
-正式发布需完成组件验证、GitHub/Gitee 同提交推送、版本 tag 与 GitHub Release，再更新总仓库子模块及消费工程的 FetchContent GIT_TAG。
-核心组件仅依赖 C11 与 `stm_common`；STM32F407 HAL1 仅用于板级示例，无强制 HAL、RTOS、日志或 RTT 依赖。
+`lcd_axs15231b_create(&config, &panel)` 返回 `stm_lcd_panel_handle_t`；配置包含通用 IO、尺寸/gap、BGR、可选 reset、必要 delay 和控制上下文。后续调用 `stm_lcd_panel_reset/init/display_on_off/draw_bitmap/draw_bitmap_async/delete`。没有旧操作 API 兼容包装。
 
-将 AgentDock 的 170×560 RGB565 初始化序列和 Espressif 的屏幕命令协议移植为独立 `stm_common` 组件。适用于 **4 线、8-bit 命令/数据 SPI（SPI mode 0）**；不提供 QSPI/I80/DSI。初始 MADCTL=RGB（可设 `bgr=1`），COLMOD=0x55。32 条模组初始化项来自 Espressif Apache-2.0 实现，应保留授权，见 `NOTICE` / `LICENSE-ESPRESSIF`。
+- IO 必須支持命令和同步像素；异步可选，不支持返回 NOT_SUPPORTED。
+- 保留原始初始化表、RGB565 和每次独立 CASET/RASET/RAMWR；右下边界不包含，不依赖连续窗口续写。
+- init 失败禁止继续绘图；reset 不存在返回 NOT_SUPPORTED。缓冲字节序由应用/port 配置，驱动不修改像素。
+- 构造失败保持空输出；非空输出拒绝覆盖。借用 IO，删除不销毁共享硬件；pending 或被 port 订阅时删除拒绝。
+- HAL 适配迁移到 `stm_lcd/adapters/stm32f4`；此组件仅提供芯片协议。
 
-## 调用
+CMake 优先复用 `stm_lcd` target 或同级源码，缺失明确报错，不拉取未经验证的框架。测试目录保留面板、非连续窗口和异步协议所有权三项及 C/C++ 头编译。
 
-```c
-lcd_axs15231b_handle_t panel = NULL;
-lcd_axs15231b_config_t cfg = {
-    .tx_param = board_tx_param, .tx_color = board_tx_color,
-    .delay_ms = board_delay_ms, .reset = board_reset,
-    .io = &board, .width = 170, .height = 560,
-};
-stm_err_t err = lcd_axs15231b_create(&cfg, &panel);
-if (err == STM_OK) err = lcd_axs15231b_reset(panel);
-if (err == STM_OK) err = lcd_axs15231b_init(panel);
-if (err == STM_OK) err = lcd_axs15231b_display_on_off(panel, 1);
-/* [x1,x2)×[y1,y2)，RGB565 紧密排列，每像素 2 字节。 */
-if (err == STM_OK) err = lcd_axs15231b_draw_bitmap(panel, 0, 0, 2, 2, pixels);
-lcd_axs15231b_delete(&panel);
-```
+示例需实现 board_init 后使用，不能直接烧录占位配置。
 
-`tx_param(io, cmd, bytes, byte_length)` 和 `tx_color(io, cmd, pixels, byte_length)` 都同步完成，零长度允许空数据；`tx_color` 必须在一笔占用 CS 与总线锁的事务内写命令和全部像素，**返回前完全消费**。非首行刷新使用 RAMWRC(0x3C)，首行使用 RAMWR(0x2C)。板级负责 RGB565 线上字节序（MSB first）、SPI/DC/CS/复位、背光、供电、总线仲裁和 DMA 缓存维护。回调上下文/像素缓冲在使用期间保持有效。不要从 ISR 调用阻塞传输；init/display/draw 非线程安全。绘图错误可能已经部分发送像素，不回滚，不自动重试。LVGL PARTIAL 同步 flush 只在 draw 返回后通知 flush_ready；错误路径也须完成缓冲释放并单独记录错误。未实现异步 DMA 完成通知。
+## 验证与许可
 
-`create` 不访问硬件，输出句柄须初始为空，失败不更改。失败回调原样传递；`STM_ERR_INVALID_ARG` 为空指针/非法矩形，`INVALID_CONFIG` 为缺回调/尺寸/色序配置，`INVALID_STATE` 为未初始化/重复创建，`OUT_OF_RANGE` 为越界，`NO_MEM` 为分配失败。reset/init 失败后需重新初始化。没有 RTOS/RTT 依赖。
+2026-10-10，在 STM32F407 + AXS15231B 消费工程以 21 MHz SPI、170×560 原生竖屏、RGB565、两个 16 行普通 SRAM 缓冲运行，用户确认显示与触摸正常。该结论仅覆盖上述配置，未作为独立长时间 soak 验收，也不宣称既有触摸畸形帧问题已修复。当前为未发布开发提交，未创建新 tag 或 Release。
 
-## 构建与验证
-
-```cmake
-add_subdirectory(Lib/stm_lcd_axs15231b)
-target_link_libraries(your_firmware PRIVATE stm_lcd_axs15231b)
-```
-
-优先复用同级 `stm_common` 或已有 target；独立构建可从固定提交下载（禁网 `-DSTM_COMMON_FETCH=OFF`）。运行主机测试：`cmake -S tests -B build && cmake --build build && ctest --test-dir build --output-on-failure`。已有 C11/C++17 头文件消费及命令/生命周期/错误测试；**不将主机测试等同于实板验收；模组时序、刷新范围及性能须在具体消费工程单独记录**。
-
-[`examples/stm32_hal/example.c`](examples/stm32_hal/example.c) 为 F407 板级占位示例，`board_init()` 故意返回配置错误，必须根据真实接线实现后再运行。本示例不提供 `.ioc`。实际板级引脚在消费工程配置，不可假设某个 SPI/CS 可直接复用。
-
+自有源码沿用维护者原 MIT，见 [LICENSE](LICENSE)。 必要第三方许可正文保留于 [LICENSE-ESPRESSIF](LICENSE-ESPRESSIF)。
